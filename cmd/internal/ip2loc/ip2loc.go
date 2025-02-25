@@ -10,16 +10,16 @@ import (
 	"strings"
 )
 
-// IPData 表示一条 IP 范围和对应的地理信息
-type IPData struct {
+// ipData 表示一条 IP 范围和对应的地理信息
+type ipData struct {
 	StartIP     uint32 // 起始 IP
 	EndIP       uint32 // 结束 IP
 	LocationIdx uint32 // 地理信息在数据区中的索引
 	prefix      uint32 // 前缀（IP 的第一个八位字节）
 }
 
-// LocationData 表示去重后的地理信息
-type LocationData struct {
+// locationData 表示去重后的地理信息
+type locationData struct {
 	Offset uint32 // 在数据区中的偏移量
 	Length uint32 // 地理信息的长度
 	Text   string // 地理信息字符串
@@ -39,8 +39,8 @@ func Convert(inputFile, outputFile string) {
 	}
 }
 
-// 从文本行解析 TXT 格式的 IPData 和 LocationData
-func parseIPData(line string, locationMap map[string]uint32, locations *[]LocationData) (IPData, error) {
+// 从文本行解析 TXT 格式的 ipData 和 locationData
+func parseIPData(line string, locationMap map[string]uint32, locations *[]locationData) (ipData, error) {
 	fields := strings.SplitN(line, "|", 15)
 	if len(fields) < 15 {
 		for len(fields) < 15 {
@@ -58,10 +58,10 @@ func parseIPData(line string, locationMap map[string]uint32, locations *[]Locati
 	} else {
 		locIdx = uint32(len(*locations))
 		locationMap[location] = locIdx
-		*locations = append(*locations, LocationData{Text: location})
+		*locations = append(*locations, locationData{Text: location})
 	}
 
-	return IPData{
+	return ipData{
 		StartIP:     startIP,
 		EndIP:       endIP,
 		LocationIdx: locIdx,
@@ -69,8 +69,8 @@ func parseIPData(line string, locationMap map[string]uint32, locations *[]Locati
 	}, nil
 }
 
-// 从文本行解析 CSV 格式的 IPData 和 LocationData
-func parseCSVData(line string, locationMap map[string]uint32, locations *[]LocationData) (IPData, error) {
+// 从文本行解析 CSV 格式的 ipData 和 locationData
+func parseCSVData(line string, locationMap map[string]uint32, locations *[]locationData) (ipData, error) {
 	fields := strings.Split(line, ",")
 	if len(fields) < 15 {
 		for len(fields) < 15 {
@@ -93,10 +93,10 @@ func parseCSVData(line string, locationMap map[string]uint32, locations *[]Locat
 	} else {
 		locIdx = uint32(len(*locations))
 		locationMap[location] = locIdx
-		*locations = append(*locations, LocationData{Text: location})
+		*locations = append(*locations, locationData{Text: location})
 	}
 
-	return IPData{
+	return ipData{
 		StartIP:     startIP,
 		EndIP:       endIP,
 		LocationIdx: locIdx,
@@ -105,16 +105,16 @@ func parseCSVData(line string, locationMap map[string]uint32, locations *[]Locat
 }
 
 // 从文件读取数据（支持 TXT 和 CSV）
-func loadIPDataFromFile(filename string) ([]IPData, []LocationData, error) {
+func loadIPDataFromFile(filename string) ([]ipData, []locationData, error) {
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, nil, fmt.Errorf("读取文件失败: %v", err)
 	}
 
 	lines := strings.Split(string(data), "\n")
-	var ipDataList []IPData
+	var ipDataList []ipData
 	locationMap := make(map[string]uint32)
-	var locations []LocationData
+	var locations []locationData
 
 	isCSV := strings.HasSuffix(strings.ToLower(filename), ".csv")
 
@@ -124,7 +124,7 @@ func loadIPDataFromFile(filename string) ([]IPData, []LocationData, error) {
 			continue
 		}
 
-		var data IPData
+		var data ipData
 		if isCSV {
 			data, err = parseCSVData(line, locationMap, &locations)
 		} else {
@@ -140,7 +140,7 @@ func loadIPDataFromFile(filename string) ([]IPData, []LocationData, error) {
 }
 
 // 生成数据文件
-func generateIPDat(filename string, ipDataList []IPData, locations []LocationData) error {
+func generateIPDat(filename string, ipDataList []ipData, locations []locationData) error {
 	sort.Slice(ipDataList, func(i, j int) bool {
 		return ipDataList[i].StartIP < ipDataList[j].StartIP
 	})
