@@ -1,6 +1,13 @@
 # ip2dat
 The IP location .dat converter written in Go.
 
+
+Install
+```
+go install github.com/billcoding/ip2dat/cmd/ip2dat@latest
+```
+
+Quickstart
 ```
 The IP .dat converter written in Go.
 

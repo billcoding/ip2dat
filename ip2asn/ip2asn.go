@@ -127,34 +127,40 @@ func generateIPDat(filename string, ipDataList []ipData, asns []asnData) error {
 	prefixStartOffset := uint32(16)
 	buffer.Write(header)
 
-	// 仅为有数据的 prefix 写入前缀区
-	indexCount := 0
+	// 前缀区：256 * 9字节
 	for prefix := uint32(0); prefix < 256; prefix++ {
 		indices, exists := prefixMap[prefix]
+		var startIndex, endIndex uint32
 		if exists && len(indices) > 0 {
-			startIndex := uint32(indexCount)
-			endIndex := startIndex + uint32(len(indices)) - 1
-			indexCount += len(indices)
-
-			prefixBytes := []byte{byte(prefix)}
-			startBytes := make([]byte, 4)
-			endBytes := make([]byte, 4)
-			binary.LittleEndian.PutUint32(startBytes, startIndex)
-			binary.LittleEndian.PutUint32(endBytes, endIndex)
-			buffer.Write(prefixBytes)
-			buffer.Write(startBytes)
-			buffer.Write(endBytes)
+			startIndex = uint32(indices[0])
+			endIndex = uint32(indices[len(indices)-1])
+		} else {
+			startIndex = 0
+			endIndex = 0
 		}
+		prefixBytes := []byte{byte(prefix)}
+		startBytes := make([]byte, 4)
+		endBytes := make([]byte, 4)
+		binary.LittleEndian.PutUint32(startBytes, startIndex)
+		binary.LittleEndian.PutUint32(endBytes, endIndex)
+		buffer.Write(prefixBytes)
+		buffer.Write(startBytes)
+		buffer.Write(endBytes)
 	}
 	prefixEndOffset := uint32(buffer.Len()) - 1
 	firstStartIpOffset := prefixEndOffset + 1
 
-	dataOffset := firstStartIpOffset + uint32(len(ipDataList)*12)
+	// 索引区：13字节每条（4字节偏移）
+	dataOffset := firstStartIpOffset + uint32(len(ipDataList)*13)
 	for i := range asns {
 		asns[i].Offset = dataOffset
 		asns[i].Length = uint32(len(asns[i].Text))
 		dataOffset += asns[i].Length
+		if asns[i].Length > 255 {
+			fmt.Printf("警告：ASN信息长度超255字节：%d\n", asns[i].Length)
+		}
 	}
+
 	for _, ipData := range ipDataList {
 		startIPBytes := make([]byte, 4)
 		endIPBytes := make([]byte, 4)
@@ -168,10 +174,11 @@ func generateIPDat(filename string, ipDataList []ipData, asns []asnData) error {
 		}
 		buffer.Write(startIPBytes)
 		buffer.Write(endIPBytes)
-		buffer.Write(localOffsetBytes[:3])
+		buffer.Write(localOffsetBytes) // 4字节偏移
 		buffer.WriteByte(localLength)
 	}
 
+	// 内容区
 	for _, asn := range asns {
 		if asn.Text == "" {
 			buffer.WriteString("|")
@@ -184,6 +191,6 @@ func generateIPDat(filename string, ipDataList []ipData, asns []asnData) error {
 	binary.LittleEndian.PutUint32(result[0:4], firstStartIpOffset)
 	binary.LittleEndian.PutUint32(result[8:12], prefixStartOffset)
 	binary.LittleEndian.PutUint32(result[12:16], prefixEndOffset)
-
+	fmt.Printf("生成文件大小: %d 字节\n", len(result))
 	return os.WriteFile(filename, result, 0644)
 }

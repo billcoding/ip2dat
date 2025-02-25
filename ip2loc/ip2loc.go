@@ -10,19 +10,17 @@ import (
 	"strings"
 )
 
-// ipData 表示一条 IP 范围和对应的地理信息
 type ipData struct {
-	StartIP     uint32 // 起始 IP
-	EndIP       uint32 // 结束 IP
-	LocationIdx uint32 // 地理信息在数据区中的索引
-	prefix      uint32 // 前缀（IP 的第一个八位字节）
+	StartIP     uint32
+	EndIP       uint32
+	LocationIdx uint32
+	prefix      uint32
 }
 
-// locationData 表示去重后的地理信息
 type locationData struct {
-	Offset uint32 // 在数据区中的偏移量
-	Length uint32 // 地理信息的长度
-	Text   string // 地理信息字符串
+	Offset uint32
+	Length uint32
+	Text   string
 }
 
 func Convert(inputFile, outputFile string) {
@@ -39,7 +37,41 @@ func Convert(inputFile, outputFile string) {
 	}
 }
 
-// 从文本行解析 TXT 格式的 ipData 和 locationData
+func loadIPDataFromFile(filename string) ([]ipData, []locationData, error) {
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return nil, nil, fmt.Errorf("读取文件失败: %v", err)
+	}
+
+	lines := strings.Split(string(data), "\n")
+	var ipDataList []ipData
+	locationMap := make(map[string]uint32)
+	var locations []locationData
+
+	isCSV := strings.HasSuffix(strings.ToLower(filename), ".csv")
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		// 可选：限制行数测试
+		// if i >= 1000 { break } // 测试小文件时启用
+		var data ipData
+		if isCSV {
+			data, err = parseCSVData(line, locationMap, &locations)
+		} else {
+			data, err = parseIPData(line, locationMap, &locations)
+		}
+		if err != nil {
+			fmt.Printf("解析错误: %v\n", err)
+			continue
+		}
+		ipDataList = append(ipDataList, data)
+	}
+	return ipDataList, locations, nil
+}
+
 func parseIPData(line string, locationMap map[string]uint32, locations *[]locationData) (ipData, error) {
 	fields := strings.SplitN(line, "|", 15)
 	if len(fields) < 15 {
@@ -61,15 +93,9 @@ func parseIPData(line string, locationMap map[string]uint32, locations *[]locati
 		*locations = append(*locations, locationData{Text: location})
 	}
 
-	return ipData{
-		StartIP:     startIP,
-		EndIP:       endIP,
-		LocationIdx: locIdx,
-		prefix:      startIP >> 24,
-	}, nil
+	return ipData{StartIP: startIP, EndIP: endIP, LocationIdx: locIdx, prefix: startIP >> 24}, nil
 }
 
-// 从文本行解析 CSV 格式的 ipData 和 locationData
 func parseCSVData(line string, locationMap map[string]uint32, locations *[]locationData) (ipData, error) {
 	fields := strings.Split(line, ",")
 	if len(fields) < 15 {
@@ -78,7 +104,6 @@ func parseCSVData(line string, locationMap map[string]uint32, locations *[]locat
 		}
 	}
 
-	// 移除引号并填充到 15 个字段
 	for i, field := range fields {
 		fields[i] = strings.Trim(field, `"`)
 	}
@@ -96,50 +121,9 @@ func parseCSVData(line string, locationMap map[string]uint32, locations *[]locat
 		*locations = append(*locations, locationData{Text: location})
 	}
 
-	return ipData{
-		StartIP:     startIP,
-		EndIP:       endIP,
-		LocationIdx: locIdx,
-		prefix:      startIP >> 24,
-	}, nil
+	return ipData{StartIP: startIP, EndIP: endIP, LocationIdx: locIdx, prefix: startIP >> 24}, nil
 }
 
-// 从文件读取数据（支持 TXT 和 CSV）
-func loadIPDataFromFile(filename string) ([]ipData, []locationData, error) {
-	data, err := os.ReadFile(filename)
-	if err != nil {
-		return nil, nil, fmt.Errorf("读取文件失败: %v", err)
-	}
-
-	lines := strings.Split(string(data), "\n")
-	var ipDataList []ipData
-	locationMap := make(map[string]uint32)
-	var locations []locationData
-
-	isCSV := strings.HasSuffix(strings.ToLower(filename), ".csv")
-
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-
-		var data ipData
-		if isCSV {
-			data, err = parseCSVData(line, locationMap, &locations)
-		} else {
-			data, err = parseIPData(line, locationMap, &locations)
-		}
-		if err != nil {
-			fmt.Printf("解析错误: %v\n", err)
-			continue
-		}
-		ipDataList = append(ipDataList, data)
-	}
-	return ipDataList, locations, nil
-}
-
-// 生成数据文件
 func generateIPDat(filename string, ipDataList []ipData, locations []locationData) error {
 	sort.Slice(ipDataList, func(i, j int) bool {
 		return ipDataList[i].StartIP < ipDataList[j].StartIP
@@ -155,14 +139,13 @@ func generateIPDat(filename string, ipDataList []ipData, locations []locationDat
 	prefixStartOffset := uint32(16)
 	buffer.Write(header)
 
-	indexCount := 0
+	// 前缀区：256 * 9字节
 	for prefix := uint32(0); prefix < 256; prefix++ {
 		indices, exists := prefixMap[prefix]
 		var startIndex, endIndex uint32
 		if exists && len(indices) > 0 {
-			startIndex = uint32(indexCount)
-			endIndex = startIndex + uint32(len(indices)) - 1
-			indexCount += len(indices)
+			startIndex = uint32(indices[0])
+			endIndex = uint32(indices[len(indices)-1])
 		} else {
 			startIndex = 0
 			endIndex = 0
@@ -179,12 +162,17 @@ func generateIPDat(filename string, ipDataList []ipData, locations []locationDat
 	prefixEndOffset := uint32(buffer.Len()) - 1
 	firstStartIpOffset := prefixEndOffset + 1
 
-	dataOffset := firstStartIpOffset + uint32(len(ipDataList)*12)
+	// 索引区：13字节每条（4字节偏移）
+	dataOffset := firstStartIpOffset + uint32(len(ipDataList)*13)
 	for i := range locations {
 		locations[i].Offset = dataOffset
 		locations[i].Length = uint32(len(locations[i].Text))
 		dataOffset += locations[i].Length
+		if locations[i].Length > 255 {
+			fmt.Printf("警告：地理信息长度超255字节：%d\n", locations[i].Length)
+		}
 	}
+
 	for _, ipData := range ipDataList {
 		startIPBytes := make([]byte, 4)
 		endIPBytes := make([]byte, 4)
@@ -198,10 +186,11 @@ func generateIPDat(filename string, ipDataList []ipData, locations []locationDat
 		}
 		buffer.Write(startIPBytes)
 		buffer.Write(endIPBytes)
-		buffer.Write(localOffsetBytes[:3])
+		buffer.Write(localOffsetBytes) // 4字节偏移
 		buffer.WriteByte(localLength)
 	}
 
+	// 内容区
 	for _, loc := range locations {
 		if loc.Text == "" {
 			buffer.WriteString("|")
@@ -214,10 +203,10 @@ func generateIPDat(filename string, ipDataList []ipData, locations []locationDat
 	binary.LittleEndian.PutUint32(result[0:4], firstStartIpOffset)
 	binary.LittleEndian.PutUint32(result[8:12], prefixStartOffset)
 	binary.LittleEndian.PutUint32(result[12:16], prefixEndOffset)
+	fmt.Printf("生成文件大小: %d 字节\n", len(result))
 	return os.WriteFile(filename, result, 0644)
 }
 
-// ipToUint32 将 IP 字符串转换为 uint32
 func ipToUint32(ip string) uint32 {
 	quads := strings.Split(ip, ".")
 	var result uint32

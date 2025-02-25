@@ -8,14 +8,12 @@ import (
 	"strings"
 )
 
-type (
-	ipIndex struct {
-		startIp, endIp, localOffset, localLength uint32
-	}
-	prefixIndex struct {
-		startIndex, endIndex uint32
-	}
-)
+type ipIndex struct {
+	startIp, endIp, localOffset, localLength uint32
+}
+type prefixIndex struct {
+	startIndex, endIndex uint32
+}
 
 type Searcher struct {
 	data      []byte
@@ -67,12 +65,10 @@ func (s *Searcher) Get(ip string) string {
 	prefix := uint32(x)
 	intIP := ipToLong(ip)
 
-	var high uint32 = 0
-	var low uint32 = 0
-
-	if _, ok := s.prefixMap[prefix]; ok {
-		low = s.prefixMap[prefix].startIndex
-		high = s.prefixMap[prefix].endIndex
+	var high, low uint32
+	if pf, ok := s.prefixMap[prefix]; ok {
+		low = pf.startIndex
+		high = pf.endIndex
 	} else {
 		return ""
 	}
@@ -88,14 +84,13 @@ func (s *Searcher) Get(ip string) string {
 	index.getIndex(myIndex, s)
 
 	if index.startIp <= intIP && index.endIp >= intIP {
-		result := index.getLocal(s)
-		return result
+		return index.getLocal(s)
 	}
 	return ""
 }
 
-func (s *Searcher) binarySearch(low uint32, high uint32, k uint32) uint32 {
-	var M uint32 = 0
+func (s *Searcher) binarySearch(low, high, k uint32) uint32 {
+	var M uint32
 	for low <= high {
 		mid := (low + high) / 2
 		endIpNum := s.getEndIp(mid)
@@ -113,48 +108,39 @@ func (s *Searcher) binarySearch(low uint32, high uint32, k uint32) uint32 {
 }
 
 func (s *Searcher) getEndIp(left uint32) uint32 {
-	leftOffset := s.firstStartIpOffset + left*12
+	leftOffset := s.firstStartIpOffset + left*13
 	return bytesToLong(s.data[4+leftOffset], s.data[5+leftOffset], s.data[6+leftOffset], s.data[7+leftOffset])
 }
 
-func (p *ipIndex) getIndex(left uint32, s *Searcher) {
-	leftOffset := s.firstStartIpOffset + left*12
-	p.startIp = bytesToLong(s.data[leftOffset], s.data[1+leftOffset], s.data[2+leftOffset], s.data[3+leftOffset])
-	p.endIp = bytesToLong(s.data[4+leftOffset], s.data[5+leftOffset], s.data[6+leftOffset], s.data[7+leftOffset])
-	p.localOffset = bytesToLong3(s.data[8+leftOffset], s.data[9+leftOffset], s.data[10+leftOffset])
-	p.localLength = uint32(s.data[11+leftOffset])
+func (p *ipIndex) getIndex(left uint32, ips *Searcher) {
+	leftOffset := ips.firstStartIpOffset + left*13
+	p.startIp = bytesToLong(ips.data[leftOffset], ips.data[1+leftOffset], ips.data[2+leftOffset], ips.data[3+leftOffset])
+	p.endIp = bytesToLong(ips.data[4+leftOffset], ips.data[5+leftOffset], ips.data[6+leftOffset], ips.data[7+leftOffset])
+	p.localOffset = bytesToLong(ips.data[8+leftOffset], ips.data[9+leftOffset], ips.data[10+leftOffset], ips.data[11+leftOffset])
+	p.localLength = uint32(ips.data[12+leftOffset])
 }
 
-func (p *ipIndex) getLocal(s *Searcher) string {
-	bytes := s.data[p.localOffset : p.localOffset+p.localLength]
+func (p *ipIndex) getLocal(ips *Searcher) string {
+	bytes := ips.data[p.localOffset : p.localOffset+p.localLength]
 	return string(bytes)
 }
 
 func ipToLong(ip string) uint32 {
 	quads := strings.Split(ip, ".")
-	var result uint32 = 0
-	a, _ := strconv.Atoi(quads[3])
-	result += uint32(a)
-	b, _ := strconv.Atoi(quads[2])
-	result += uint32(b) << 8
-	c, _ := strconv.Atoi(quads[1])
-	result += uint32(c) << 16
-	d, _ := strconv.Atoi(quads[0])
-	result += uint32(d) << 24
+	var result uint32
+	for i, q := range quads {
+		n, _ := strconv.Atoi(q)
+		result |= uint32(n) << (24 - i*8)
+	}
 	return result
 }
 
 func bytesToLong(a, b, c, d byte) uint32 {
-	a1 := uint32(a)
-	b1 := uint32(b)
-	c1 := uint32(c)
-	d1 := uint32(d)
-	return (a1 & 0xFF) | ((b1 << 8) & 0xFF00) | ((c1 << 16) & 0xFF0000) | ((d1 << 24) & 0xFF000000)
+	return uint32(a) | (uint32(b) << 8) | (uint32(c) << 16) | (uint32(d) << 24)
 }
 
-func bytesToLong3(a, b, c byte) uint32 {
-	a1 := uint32(a)
-	b1 := uint32(b)
-	c1 := uint32(c)
-	return (a1 & 0xFF) | ((b1 << 8) & 0xFF00) | ((c1 << 16) & 0xFF0000)
+func main() {
+	// 示例使用
+	result := Search("asn.dat", "8.8.8.8")
+	fmt.Println(result)
 }

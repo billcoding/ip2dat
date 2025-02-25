@@ -47,14 +47,12 @@ func New(datFile string) (*Searcher, error) {
 	s.firstStartIpOffset = bytesToLong(data[0], data[1], data[2], data[3])
 	s.prefixStartOffset = bytesToLong(data[8], data[9], data[10], data[11])
 	s.prefixEndOffset = bytesToLong(data[12], data[13], data[14], data[15])
-	s.prefixCount = (s.prefixEndOffset-s.prefixStartOffset)/9 + 1 // 前缀区块每组
+	s.prefixCount = (s.prefixEndOffset-s.prefixStartOffset)/9 + 1
 
-	// 初始化前缀对应索引区区间
 	indexBuffer := s.data[s.prefixStartOffset:(s.prefixEndOffset + 9)]
 	for k := uint32(0); k < s.prefixCount; k++ {
 		i := k * 9
 		prefix := uint32(indexBuffer[i] & 0xFF)
-
 		pf := prefixIndex{}
 		pf.startIndex = bytesToLong(indexBuffer[i+1], indexBuffer[i+2], indexBuffer[i+3], indexBuffer[i+4])
 		pf.endIndex = bytesToLong(indexBuffer[i+5], indexBuffer[i+6], indexBuffer[i+7], indexBuffer[i+8])
@@ -96,7 +94,6 @@ func (s *Searcher) Get(ip string) string {
 	}
 }
 
-// 二分逼近算法
 func (s *Searcher) binarySearch(low uint32, high uint32, k uint32) uint32 {
 	var M uint32 = 0
 	for low <= high {
@@ -105,7 +102,7 @@ func (s *Searcher) binarySearch(low uint32, high uint32, k uint32) uint32 {
 		if endIpNum >= k {
 			M = mid
 			if mid == 0 {
-				break // 防止溢出
+				break
 			}
 			high = mid - 1
 		} else {
@@ -115,25 +112,19 @@ func (s *Searcher) binarySearch(low uint32, high uint32, k uint32) uint32 {
 	return M
 }
 
-// 只获取结束ip的数值
-// 索引区第left个索引
-// 返回结束ip的数值
 func (s *Searcher) getEndIp(left uint32) uint32 {
-	leftOffset := s.firstStartIpOffset + left*12
+	leftOffset := s.firstStartIpOffset + left*13 // 调整为13字节
 	return bytesToLong(s.data[4+leftOffset], s.data[5+leftOffset], s.data[6+leftOffset], s.data[7+leftOffset])
 }
 
 func (p *ipIndex) getIndex(left uint32, ips *Searcher) {
-	leftOffset := ips.firstStartIpOffset + left*12
+	leftOffset := ips.firstStartIpOffset + left*13 // 调整为13字节
 	p.startIp = bytesToLong(ips.data[leftOffset], ips.data[1+leftOffset], ips.data[2+leftOffset], ips.data[3+leftOffset])
 	p.endIp = bytesToLong(ips.data[4+leftOffset], ips.data[5+leftOffset], ips.data[6+leftOffset], ips.data[7+leftOffset])
-	p.localOffset = bytesToLong3(ips.data[8+leftOffset], ips.data[9+leftOffset], ips.data[10+leftOffset])
-	p.localLength = uint32(ips.data[11+leftOffset])
+	p.localOffset = bytesToLong(ips.data[8+leftOffset], ips.data[9+leftOffset], ips.data[10+leftOffset], ips.data[11+leftOffset]) // 4字节偏移
+	p.localLength = uint32(ips.data[12+leftOffset])
 }
 
-// / 返回地址信息
-// / 地址信息的流位置
-// / 地址信息的流长度
 func (p *ipIndex) getLocal(ips *Searcher) string {
 	bytes := ips.data[p.localOffset : p.localOffset+p.localLength]
 	return string(bytes)
@@ -153,18 +144,10 @@ func ipToLong(ip string) uint32 {
 	return result
 }
 
-// 字节转整形
 func bytesToLong(a, b, c, d byte) uint32 {
 	a1 := uint32(a)
 	b1 := uint32(b)
 	c1 := uint32(c)
 	d1 := uint32(d)
 	return (a1 & 0xFF) | ((b1 << 8) & 0xFF00) | ((c1 << 16) & 0xFF0000) | ((d1 << 24) & 0xFF000000)
-}
-
-func bytesToLong3(a, b, c byte) uint32 {
-	a1 := uint32(a)
-	b1 := uint32(b)
-	c1 := uint32(c)
-	return (a1 & 0xFF) | ((b1 << 8) & 0xFF00) | ((c1 << 16) & 0xFF0000)
 }

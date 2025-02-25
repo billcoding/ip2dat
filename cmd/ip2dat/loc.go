@@ -1,9 +1,9 @@
-package cmd
+package main
 
 import (
 	"fmt"
 
-	"github.com/billcoding/ip2dat/cmd/internal/ip2loc"
+	"github.com/billcoding/ip2dat/ip2loc"
 	"github.com/billcoding/ip2dat/iplocsearch"
 	"github.com/spf13/cobra"
 )
