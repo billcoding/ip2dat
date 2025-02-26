@@ -23,18 +23,19 @@ type locationData struct {
 	Text   string
 }
 
-func Convert(inputFile, outputFile string) {
+func Convert(inputFile, outputFile string) (err error) {
 	ipDataList, locations, err := loadIPDataFromFile(inputFile)
 	if err != nil {
 		fmt.Println("加载数据失败:", err)
-		return
+		return err
 	}
 	err = generateIPDat(outputFile, ipDataList, locations)
 	if err != nil {
 		fmt.Println("生成文件失败:", err)
-	} else {
-		fmt.Printf("生成文件成功: %s\n", outputFile)
+		return err
 	}
+	fmt.Printf("生成文件成功: %s\n", outputFile)
+	return
 }
 
 func loadIPDataFromFile(filename string) ([]ipData, []locationData, error) {

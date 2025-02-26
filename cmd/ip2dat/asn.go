@@ -15,7 +15,7 @@ var asnCmd = &cobra.Command{
 	Long:    `Convertor IP asn from TXT or CSV to .dat.`,
 	Example: `ip2dat asn -i /to/path/ip2asn.txt -o /to/path/ip2asn.dat`,
 	Run: func(_ *cobra.Command, _ []string) {
-		ip2asn.Convert(asnInputFile, asnOutputFile)
+		_ = ip2asn.Convert(asnInputFile, asnOutputFile)
 		if asnTest && asnTestIp != "" {
 			fmt.Println(asnTestIp + " asn: " + ipasnsearch.Search(asnOutputFile, asnTestIp))
 		}

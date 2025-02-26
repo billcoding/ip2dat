@@ -25,18 +25,19 @@ type asnData struct {
 	Text   string // ASN 信息字符串（ipRange|asn|组织名称）
 }
 
-func Convert(inputFile, outputFile string) {
+func Convert(inputFile, outputFile string) (err error) {
 	ipDataList, asnList, err := loadIPDataFromFile(inputFile)
 	if err != nil {
 		fmt.Println("加载数据失败:", err)
-		return
+		return err
 	}
 	err = generateIPDat(outputFile, ipDataList, asnList)
 	if err != nil {
 		fmt.Println("生成文件失败:", err)
-	} else {
-		fmt.Printf("生成文件成功: %s\n", outputFile)
+		return err
 	}
+	fmt.Printf("生成文件成功: %s\n", outputFile)
+	return
 }
 
 // 从文本行解析 CSV 格式的 ipData 和 asnData

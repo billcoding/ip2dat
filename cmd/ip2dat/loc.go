@@ -15,7 +15,7 @@ var locationCmd = &cobra.Command{
 	Long:    `Convertor IP location from TXT or CSV to .dat.`,
 	Example: `ip2dat loc -i /to/path/ip2location.txt -o /to/path/ip2location.dat`,
 	Run: func(_ *cobra.Command, _ []string) {
-		ip2loc.Convert(locationInputFile, locationOutputFile)
+		_ = ip2loc.Convert(locationInputFile, locationOutputFile)
 		if locationTest && locationTestIp != "" {
 			fmt.Println(locationTestIp + " location: " + iplocsearch.Search(locationOutputFile, locationTestIp))
 		}
